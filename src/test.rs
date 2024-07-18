@@ -4,17 +4,8 @@
 mod tests {
     use std::assert_eq;
 
+    use crate::*;
     use borsh::{BorshDeserialize, BorshSerialize};
-    use spl_token::{
-        id, instruction,
-        state::{Account, Mint},
-        ID,
-    };
-    use token_sale::{
-        entrypoint,
-        instruction::TokenSaleInstruction,
-        state::{pda::find_token_base_pda, TokenBase},
-    };
     use {
         assert_matches::*,
         // solana_program::{program_pack::Pack, rent::Rent, system_instruction},
@@ -41,80 +32,62 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_open_sale() {
+    async fn test_initialize() {
+        // show program logs when testing
         solana_logger::setup_with_default("solana_program::message=debug");
 
         let program_id = Pubkey::new_unique();
-        let program_test = ProgramTest::new("token_sale", program_id, None);
+        let program_test = ProgramTest::new(
+            // .so fixture is  retrieved from /target/deploy
+            "counter_test",
+            program_id,
+            // shank is incompatible with instantiating the BuiltInFunction
+            None,
+        );
+
         let (mut banks_client, payer, recent_blockhash) = program_test.start().await;
 
-        // create mint
-        let mint = Keypair::new();
-        let rent = banks_client.get_rent().await.unwrap();
-        let decimals = 0;
+        // create counter
+        let (counter_pda, counter_canonical_bump) =
+            pda::find_counter_pda(&program_id, &payer.pubkey());
 
-        // Setup the mint
-        let transaction = Transaction::new_signed_with_payer(
-            &[
-                system_instruction::create_account(
-                    &payer.pubkey(),
-                    &mint.pubkey(),
-                    rent.minimum_balance(Mint::LEN),
-                    Mint::LEN as u64,
-                    &spl_token::id(),
-                ),
-                spl_token::instruction::initialize_mint(
-                    &spl_token::id(),
-                    &mint.pubkey(),
-                    &payer.pubkey(),
-                    None,
-                    decimals,
-                )
-                .unwrap(),
-            ],
-            Some(&payer.pubkey()),
-            &[&payer, &mint],
-            recent_blockhash,
-        );
-        banks_client.process_transaction(transaction).await.unwrap();
+        // create Initialize instruction
+        let initialize_ix = instruction::CounterTestInstruction::Initialize;
+        let mut initialize_ix_data = Vec::new();
+        initialize_ix.serialize(&mut initialize_ix_data).unwrap();
 
-        // create token_base
-        let (token_base_pda, _) = find_token_base_pda(&program_id, &payer.pubkey(), &mint.pubkey());
-
-        let vault = Keypair::new();
-
-        let price = 100000000000;
-        let default_purchase_limit = 100;
-        let instruction = TokenSaleInstruction::OpenSale {
-            price,
-            purchase_limit: default_purchase_limit,
-            whitelist_root: [0u8; 32],
-        };
-
-        let mut instruction_data = Vec::new();
-        instruction.serialize(&mut instruction_data).unwrap();
-
+        // create transaction
         let transaction = Transaction::new_signed_with_payer(
             &[Instruction {
                 program_id,
                 accounts: vec![
-                    AccountMeta::new(token_base_pda, false),
-                    AccountMeta::new_readonly(mint.pubkey(), false),
-                    AccountMeta::new_readonly(vault.pubkey(), false),
+                    AccountMeta::new(counter_pda, false),
                     AccountMeta::new(payer.pubkey(), true),
-                    AccountMeta::new_readonly(RENT_SYSVAR_ID, false),
-                    AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
                 ],
-                data: instruction_data,
+                data: initialize_ix_data,
             }],
             Some(&payer.pubkey()),
             &[&payer],
             recent_blockhash,
         );
 
+        // send tx
         banks_client.process_transaction(transaction).await.unwrap();
 
-        // instruction went through
-        assert_eq!(true, true);
+        // confirm state
+        let counter_account_info = banks_client
+            .get_account(counter_pda)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let counter = state::Counter::try_from_slice(&counter_account_info.data).unwrap();
+
+        // check right authority
+        assert_eq!(counter.authority, payer.pubkey());
+        // check counter is 0
+        assert_eq!(counter.count, 0);
+        // check canonical bump is stored
+        assert_eq!(counter.bump, counter_canonical_bump);
     }
 }

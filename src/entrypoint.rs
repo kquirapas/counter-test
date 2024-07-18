@@ -11,6 +11,6 @@ pub fn process_instruction<'a>(
     instruction_data: &[u8],
 ) -> ProgramResult {
     // TODO: use `if let` for verbosity
-    Processor::process(program_id, accounts, instruction_data)?;
+    Processor::process_instruction(program_id, accounts, instruction_data)?;
     Ok(())
 }

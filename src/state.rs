@@ -9,6 +9,7 @@ pub struct Counter {
     pub discriminator: [u8; 8],
     pub authority: Pubkey,
     pub count: u64,
+    pub bump: u8,
 }
 
 impl Counter {

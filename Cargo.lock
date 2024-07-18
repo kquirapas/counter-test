@@ -870,7 +870,6 @@ dependencies = [
  "solana-sdk",
  "spl-discriminator",
  "thiserror",
- "tokio",
 ]
 
 [[package]]
