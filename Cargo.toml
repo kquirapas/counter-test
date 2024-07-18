@@ -26,3 +26,4 @@ borsh = "1.5.1"
 [lib]
 name="counter_test"
 crate-type = ["cdylib", "rlib"]
+doctest = false
