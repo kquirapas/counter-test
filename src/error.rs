@@ -8,8 +8,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error, FromPrimitive)]
 pub enum CounterTestError {
-    #[error("Invalid account data length")]
-    InvalidAccountDataLength, // 0
+    #[error("Already initialized")]
+    AlreadyInitialized, // 0
 }
 
 // allow .into() for Custom Error to ProgramError conversion

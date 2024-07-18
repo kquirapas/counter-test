@@ -16,6 +16,7 @@ pub enum CounterTestInstruction {
         desc = "Counter account. Seeds ['counter', `authority.key`]"
     )]
     #[account(1, signer, name = "authority", desc = "Counter authority")]
+    #[account(2, name = "system_program", desc = "System Program")]
     Initialize,
 
     /// Increment the Counter

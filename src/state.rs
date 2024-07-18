@@ -3,13 +3,19 @@ use shank::ShankAccount;
 use solana_program::pubkey::Pubkey;
 use spl_discriminator::{ArrayDiscriminator, SplDiscriminate};
 
+#[repr(C)]
+#[rustfmt::skip]
 #[derive(Clone, BorshSerialize, BorshDeserialize, Debug, ShankAccount, SplDiscriminate)]
 #[discriminator_hash_input("counter_test::state::counter")]
 pub struct Counter {
-    pub discriminator: [u8; 8],
     pub authority: Pubkey,
+    pub discriminator: [u8; 8],
     pub count: u64,
     pub bump: u8,
+
+    // ensure C-memory layout alignment for proper
+    // deserialization
+    _padding: [u8; 15],
 }
 
 impl Counter {

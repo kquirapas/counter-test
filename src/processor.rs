@@ -6,12 +6,13 @@ use crate::{
     pda::{create_counter_pda, find_counter_pda},
     state::Counter,
 };
-use borsh::BorshDeserialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::sysvar::Sysvar;
 use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, program::invoke_signed, pubkey::Pubkey,
     rent::Rent, system_instruction,
 };
+use spl_discriminator::SplDiscriminate;
 
 /// Program state processor
 pub struct Processor {}
@@ -51,6 +52,7 @@ impl<'a> Processor {
 /// Accounts
 /// 0. `[WRITE]`    `Counter` account PDA
 /// 1. `[SIGNER]`   `Authority` authority, fee payer
+/// 2. `[]`         `System Program`
 ///
 /// Instruction Data:
 /// - (None)
@@ -65,14 +67,17 @@ pub fn process_initialize(program_id: &Pubkey, ctx: Context<InitializeAccounts>)
     // ensure canonical bump was used for counter PDA
     assert_eq!(*ctx.accounts.counter.key, counter_pda);
 
-    // retrieve counter account data slice
-    let counter_data = ctx.accounts.counter.try_borrow_mut_data()?;
-
-    // ensure counter data size is what we expect
-    assert_eq!(counter_data.len(), Counter::LEN);
-
     // load rent sysvar directly from runtime
     let rent_sysvar = Rent::get()?;
+
+    // @dev note that you need to relinquish borrowed data
+    // if it's going to be used in a possibly mutating
+    // invoke_signed call.
+    //
+    // example below (unnecessary borrow, for demo only)
+    let counter_data = ctx.accounts.counter.try_borrow_mut_data()?;
+    // relinquish
+    drop(counter_data);
 
     invoke_signed(
         &system_instruction::create_account(
@@ -90,11 +95,19 @@ pub fn process_initialize(program_id: &Pubkey, ctx: Context<InitializeAccounts>)
         ]],
     )?;
 
-    // initialize counter
+    // @dev counter_data is really here but I'll leave the above
+    // as a good lesson for being mindful with mutable references
+    //
+    // retrieve counter account data slice
+    let mut counter_data = ctx.accounts.counter.try_borrow_mut_data()?;
     let mut counter_account = Counter::try_from_slice(&counter_data)?;
+    // initialize counter
+    counter_account.discriminator = Counter::SPL_DISCRIMINATOR.into();
     counter_account.count = 0;
     counter_account.authority = *ctx.accounts.authority.key;
     counter_account.bump = counter_canonical_bump;
+    // write data to account
+    counter_account.serialize(&mut &mut counter_data[..])?;
 
     Ok(())
 }
@@ -114,7 +127,7 @@ pub fn process_increment(program_id: &Pubkey, ctx: Context<IncrementAccounts>) -
     assert!(ctx.accounts.authority.is_signer);
 
     // retrieve counter account data slice
-    let counter_data = ctx.accounts.counter.try_borrow_mut_data()?;
+    let mut counter_data = ctx.accounts.counter.try_borrow_mut_data()?;
 
     // ensure counter data size is what we expect
     assert_eq!(counter_data.len(), Counter::LEN);
@@ -130,6 +143,9 @@ pub fn process_increment(program_id: &Pubkey, ctx: Context<IncrementAccounts>) -
 
     // increment counter
     counter_account.count += 1;
+
+    // write data to account
+    counter_account.serialize(&mut &mut counter_data[..])?;
 
     Ok(())
 }
