@@ -1,4 +1,4 @@
-#![cfg(feature = "test-sbf")]
+// #![cfg(feature = "test-sbf")]
 
 #[cfg(test)]
 mod tests {
@@ -67,13 +67,10 @@ mod tests {
         banks_client.process_transaction(transaction).await.unwrap();
 
         // confirm state
-        let counter_account_info = banks_client
-            .get_account(counter_pda)
+        let counter = banks_client
+            .get_account_data_with_borsh::<state::Counter>(counter_pda)
             .await
-            .unwrap()
             .unwrap();
-
-        let counter = state::Counter::try_from_slice(&counter_account_info.data).unwrap();
 
         // check right authority
         assert_eq!(counter.authority, payer.pubkey());
@@ -142,13 +139,10 @@ mod tests {
         banks_client.process_transaction(transaction).await.unwrap();
 
         // confirm state
-        let counter_account_info = banks_client
-            .get_account(counter_pda)
+        let counter = banks_client
+            .get_account_data_with_borsh::<state::Counter>(counter_pda)
             .await
-            .unwrap()
             .unwrap();
-
-        let counter = state::Counter::try_from_slice(&counter_account_info.data).unwrap();
 
         // check counter is 0
         assert_eq!(counter.count, 1);
